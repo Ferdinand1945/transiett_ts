@@ -5,12 +5,15 @@ import * as campaignsApi from "@/lib/api/campaigns";
 import type { Campaign, CreateCampaignInput } from "@/lib/types";
 
 type UseCampaignsOptions = {
+  initialCampaigns?: Campaign[];
   onError?: (message: string) => void;
 };
 
 export function useCampaigns(options: UseCampaignsOptions = {}) {
-  const { onError } = options;
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const { initialCampaigns, onError } = options;
+  const [campaigns, setCampaigns] = useState<Campaign[]>(
+    initialCampaigns ?? [],
+  );
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -21,6 +24,8 @@ export function useCampaigns(options: UseCampaignsOptions = {}) {
   }, []);
 
   useEffect(() => {
+    if (initialCampaigns !== undefined) return;
+
     let cancelled = false;
 
     (async () => {
@@ -37,7 +42,7 @@ export function useCampaigns(options: UseCampaignsOptions = {}) {
     return () => {
       cancelled = true;
     };
-  }, [onError]);
+  }, [initialCampaigns, onError]);
 
   const createCampaign = useCallback(
     async (input: CreateCampaignInput) => {

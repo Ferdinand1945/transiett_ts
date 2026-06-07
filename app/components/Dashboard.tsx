@@ -1,15 +1,23 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useCampaigns } from "@/app/hooks/useCampaigns";
 import { useToast } from "@/app/hooks/useToast";
 import { useVouchers } from "@/app/hooks/useVouchers";
-import Header from "./Header";
+import type { Campaign } from "@/lib/types";
 import { CheckCircle, AlertCircle } from "@deemlol/next-icons";
 import VouchersModal from "./VouchersModal";
 import CampaignsSection, { type CampaignFormState } from "./CampaignsSection";
 
-export default function Dashboard() {
+type DashboardProps = {
+  initialCampaigns: Campaign[];
+  loadError?: string | null;
+};
+
+export default function Dashboard({
+  initialCampaigns,
+  loadError = null,
+}: DashboardProps) {
   const { message, messageType, showToast, clearToast } = useToast();
   const onError = useCallback(
     (text: string) => showToast(text, "error"),
@@ -24,7 +32,7 @@ export default function Dashboard() {
     refresh: refreshCampaigns,
     createCampaign,
     deleteCampaign,
-  } = useCampaigns({ onError });
+  } = useCampaigns({ initialCampaigns, onError });
 
   const {
     vouchers,
@@ -46,6 +54,10 @@ export default function Dashboard() {
       .toISOString()
       .slice(0, 10),
   });
+
+  useEffect(() => {
+    if (loadError) showToast(loadError, "error");
+  }, [loadError, showToast]);
 
   async function handleCreateCampaign(e: React.FormEvent) {
     e.preventDefault();
@@ -106,53 +118,50 @@ export default function Dashboard() {
   const loading = campaignsLoading || vouchersLoading;
 
   return (
-    <div className="app-gradient min-h-full">
-      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
-        <Header />
-        {message && (
-          <div
-            role="status"
-            className={`mb-6 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
-              messageType === "success"
-                ? "border-emerald-200/80 bg-emerald-50 text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-200"
-                : "border-red-200/80 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
-            }`}
-          >
-            <span className="mt-0.5 shrink-0 text-base">
-              {messageType === "success" ? <CheckCircle /> : <AlertCircle />}
-            </span>
-            <p>{message}</p>
-          </div>
-        )}
+    <>
+      {message && (
+        <div
+          role="status"
+          className={`mb-6 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+            messageType === "success"
+              ? "border-emerald-200/80 bg-emerald-50 text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-200"
+              : "border-red-200/80 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
+          }`}
+        >
+          <span className="mt-0.5 shrink-0 text-base">
+            {messageType === "success" ? <CheckCircle /> : <AlertCircle />}
+          </span>
+          <p>{message}</p>
+        </div>
+      )}
 
-        <CampaignsSection
-          campaigns={campaigns}
-          selectedId={selectedId}
+      <CampaignsSection
+        campaigns={campaigns}
+        selectedId={selectedId}
+        loading={loading}
+        form={form}
+        setForm={setForm}
+        onCreateCampaign={handleCreateCampaign}
+        onCampaignSelect={(id) => {
+          setSelectedId(id);
+          setVouchersModalOpen(true);
+        }}
+      />
+
+      {selected && (
+        <VouchersModal
+          open={vouchersModalOpen}
+          onClose={() => setVouchersModalOpen(false)}
+          campaign={selected}
+          vouchers={vouchers}
+          voucherTotal={voucherTotal}
+          batchCount={batchCount}
+          setBatchCount={setBatchCount}
           loading={loading}
-          form={form}
-          setForm={setForm}
-          onCreateCampaign={handleCreateCampaign}
-          onCampaignSelect={(id) => {
-            setSelectedId(id);
-            setVouchersModalOpen(true);
-          }}
+          onGenerate={handleBatchVouchers}
+          onDeleteCampaign={handleDeleteCampaign}
         />
-
-        {selected && (
-          <VouchersModal
-            open={vouchersModalOpen}
-            onClose={() => setVouchersModalOpen(false)}
-            campaign={selected}
-            vouchers={vouchers}
-            voucherTotal={voucherTotal}
-            batchCount={batchCount}
-            setBatchCount={setBatchCount}
-            loading={loading}
-            onGenerate={handleBatchVouchers}
-            onDeleteCampaign={handleDeleteCampaign}
-          />
-        )}
-      </div>
-    </div>
+      )}
+    </>
   );
 }
