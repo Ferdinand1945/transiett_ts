@@ -1,23 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { Campaign, Voucher } from "@/lib/types";
+import { useCallback, useState } from "react";
+import { useCampaigns } from "@/app/hooks/useCampaigns";
+import { useToast } from "@/app/hooks/useToast";
+import { useVouchers } from "@/app/hooks/useVouchers";
 import Header from "./Header";
 import { CheckCircle, AlertCircle } from "@deemlol/next-icons";
 import VouchersModal from "./VouchersModal";
 import CampaignsSection, { type CampaignFormState } from "./CampaignsSection";
 
 export default function Dashboard() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [vouchersModalOpen, setVouchersModalOpen] = useState(false);
-  const [vouchers, setVouchers] = useState<Voucher[]>([]);
-  const [voucherTotal, setVoucherTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [messageType, setMessageType] = useState<"success" | "error">("success");
-  const [batchCount, setBatchCount] = useState("100");
+  const { message, messageType, showToast, clearToast } = useToast();
+  const onError = useCallback(
+    (text: string) => showToast(text, "error"),
+    [showToast],
+  );
 
+  const {
+    campaigns,
+    selectedId,
+    setSelectedId,
+    loading: campaignsLoading,
+    refresh: refreshCampaigns,
+    createCampaign,
+    deleteCampaign,
+  } = useCampaigns({ onError });
+
+  const {
+    vouchers,
+    total: voucherTotal,
+    loading: vouchersLoading,
+    batchCount,
+    setBatchCount,
+    refresh: refreshVouchers,
+    generateBatch,
+  } = useVouchers(selectedId, { onError });
+
+  const [vouchersModalOpen, setVouchersModalOpen] = useState(false);
   const [form, setForm] = useState<CampaignFormState>({
     prefix: "DISCOUNT",
     amount: "10",
@@ -28,157 +47,68 @@ export default function Dashboard() {
       .slice(0, 10),
   });
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/campaigns");
-        if (!res.ok) throw new Error("Failed to load campaigns");
-        const data = (await res.json()) as Campaign[];
-        if (!cancelled) setCampaigns(data);
-      } catch (e) {
-        showMessage(e instanceof Error ? e.message : "Load failed", "error");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (selectedId == null) {
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(
-          `/api/campaigns/${selectedId}/vouchers?limit=100&offset=0`,
-        );
-        if (!res.ok) throw new Error("Failed to load vouchers");
-        const data = (await res.json()) as { vouchers: Voucher[]; total: number };
-        if (!cancelled) {
-          setVouchers(data.vouchers);
-          setVoucherTotal(data.total);
-        }
-      } catch (e) {
-        showMessage(e instanceof Error ? e.message : "Load failed", "error");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedId]);
-
-  function showMessage(text: string, type: "success" | "error" = "success") {
-    setMessage(text);
-    setMessageType(type);
-  }
-
-  async function refreshCampaigns() {
-    const res = await fetch("/api/campaigns");
-    if (!res.ok) throw new Error("Failed to load campaigns");
-    const data = (await res.json()) as Campaign[];
-    setCampaigns(data);
-  }
-
-  async function refreshVouchers(campaignId: number) {
-    const res = await fetch(`/api/campaigns/${campaignId}/vouchers?limit=100&offset=0`);
-    if (!res.ok) throw new Error("Failed to load vouchers");
-    const data = (await res.json()) as { vouchers: Voucher[]; total: number };
-    setVouchers(data.vouchers);
-    setVoucherTotal(data.total);
-  }
-
   async function handleCreateCampaign(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    setMessage(null);
+    clearToast();
     try {
-      const res = await fetch("/api/campaigns", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prefix: form.prefix,
-          amount: Number(form.amount),
-          currency: form.currency,
-          valid_from: form.valid_from,
-          valid_to: form.valid_to,
-        }),
+      const campaign = await createCampaign({
+        prefix: form.prefix,
+        amount: Number(form.amount),
+        currency: form.currency,
+        valid_from: form.valid_from,
+        valid_to: form.valid_to,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Create failed");
-      await refreshCampaigns();
-      setSelectedId(data.id);
-      showMessage(`Campaign "${data.prefix}" created successfully.`);
+      showToast(`Campaign "${campaign.prefix}" created successfully.`);
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : "Create failed", "error");
-    } finally {
-      setLoading(false);
+      showToast(err instanceof Error ? err.message : "Create failed", "error");
     }
   }
 
   async function handleBatchVouchers() {
-    if (selectedId == null) return;
-    setLoading(true);
-    setMessage(null);
+    clearToast();
     try {
-      const count = Number(batchCount);
-      const res = await fetch(`/api/campaigns/${selectedId}/vouchers`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ count }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Batch create failed");
+      const data = await generateBatch(Number(batchCount));
+      if (!data) return;
+
       await refreshCampaigns();
-      await refreshVouchers(selectedId);
+      await refreshVouchers();
+
       if (data.complete === false || data.created !== data.requested) {
-        showMessage(
+        showToast(
           `Created ${data.created.toLocaleString()} of ${data.requested.toLocaleString()} requested voucher(s).`,
           "error",
         );
       } else {
-        showMessage(
-          `Generated ${data.created.toLocaleString()} voucher(s).`,
-        );
+        showToast(`Generated ${data.created.toLocaleString()} voucher(s).`);
       }
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : "Batch create failed", "error");
-    } finally {
-      setLoading(false);
+      showToast(
+        err instanceof Error ? err.message : "Batch create failed",
+        "error",
+      );
     }
   }
 
   async function handleDeleteCampaign() {
     if (selectedId == null) return;
     if (!confirm("Delete this campaign and all its vouchers?")) return;
-    setLoading(true);
-    setMessage(null);
+
+    clearToast();
     try {
-      const res = await fetch(`/api/campaigns/${selectedId}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? "Delete failed");
-      }
-      setSelectedId(null);
-      await refreshCampaigns();
-      showMessage("Campaign deleted.");
+      await deleteCampaign(selectedId);
+      showToast("Campaign deleted.");
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : "Delete failed", "error");
-    } finally {
-      setLoading(false);
+      showToast(err instanceof Error ? err.message : "Delete failed", "error");
     }
   }
 
   const selected = campaigns.find((c) => c.id === selectedId);
+  const loading = campaignsLoading || vouchersLoading;
 
   return (
     <div className="app-gradient min-h-full">
       <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
-      <Header />
+        <Header />
         {message && (
           <div
             role="status"
@@ -189,7 +119,7 @@ export default function Dashboard() {
             }`}
           >
             <span className="mt-0.5 shrink-0 text-base">
-              {messageType === "success" ? <CheckCircle/> : <AlertCircle/>}
+              {messageType === "success" ? <CheckCircle /> : <AlertCircle />}
             </span>
             <p>{message}</p>
           </div>

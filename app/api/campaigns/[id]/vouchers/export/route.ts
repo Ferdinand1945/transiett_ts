@@ -1,17 +1,19 @@
-import { getCampaign, streamVoucherCodes } from "@/lib/campaigns";
+import { findCampaignById } from "@/lib/repositories/campaigns";
+import { streamVoucherCodesByCampaignId } from "@/lib/repositories/vouchers";
+import { parseCampaignId } from "@/lib/validators/campaigns";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, { params }: Params) {
   try {
     const { id } = await params;
-    const campaignId = Number(id);
-    if (!Number.isFinite(campaignId)) {
-      return new Response("Invalid campaign id", { status: 400 });
+    const parsed = parseCampaignId(id);
+    if (!parsed.success) {
+      return new Response(parsed.error, { status: 400 });
     }
-    const campaign = await getCampaign(campaignId);
+
+    const campaign = await findCampaignById(parsed.data);
     if (!campaign) {
-      console.log('no campaungs');
       return new Response("Campaign not found", { status: 404 });
     }
 
@@ -19,7 +21,7 @@ export async function GET(_request: Request, { params }: Params) {
     const stream = new ReadableStream({
       async start(controller) {
         controller.enqueue(encoder.encode("code\n"));
-        for await (const codes of streamVoucherCodes(campaignId)) {
+        for await (const codes of streamVoucherCodesByCampaignId(parsed.data)) {
           for (const code of codes) {
             controller.enqueue(encoder.encode(`${code}\n`));
           }
@@ -31,7 +33,7 @@ export async function GET(_request: Request, { params }: Params) {
     return new Response(stream, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="vouchers-${campaign.prefix}-${campaignId}.csv"`,
+        "Content-Disposition": `attachment; filename="vouchers-${campaign.prefix}-${parsed.data}.csv"`,
       },
     });
   } catch (err) {
