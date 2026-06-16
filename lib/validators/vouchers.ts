@@ -9,19 +9,19 @@ export function validateVoucherListQuery(
 ): ValidationResult<{ limit: number; offset: number }> {
   const limitRaw = searchParams.get("limit");
   const offsetRaw = searchParams.get("offset");
-  const limit = Math.min(
-    Number(limitRaw ?? DEFAULT_VOUCHER_LIMIT),
-    MAX_VOUCHER_LIMIT,
-  );
-  const offset = Math.max(Number(offsetRaw ?? 0), 0);
+  const parsedLimit = Number(limitRaw ?? DEFAULT_VOUCHER_LIMIT);
+  const parsedOffset = Number(offsetRaw ?? 0);
 
-  if (!Number.isFinite(limit) || limit < 1) {
+  if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
     return validationError("limit must be a positive number");
   }
 
-  if (!Number.isFinite(offset)) {
+  if (!Number.isInteger(parsedOffset) || parsedOffset < 0) {
     return validationError("offset must be a non-negative number");
   }
+
+  const limit = Math.min(parsedLimit, MAX_VOUCHER_LIMIT);
+  const offset = parsedOffset;
 
   return { success: true, data: { limit, offset } };
 }
