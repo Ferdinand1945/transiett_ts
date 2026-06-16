@@ -3,10 +3,11 @@ import { validationError, type ValidationResult } from "./common";
 
 export function parseCampaignId(id: string): ValidationResult<number> {
   const campaignId = Number(id);
-  if (!Number.isFinite(campaignId)) {
+  if (!Number.isInteger(campaignId) || campaignId < 1) {
     return validationError("Invalid campaign id");
   }
   return { success: true, data: campaignId };
+}
 }
 
 export function validateCreateCampaignInput(
