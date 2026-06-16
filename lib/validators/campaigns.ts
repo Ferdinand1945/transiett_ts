@@ -23,8 +23,9 @@ export function validateCreateCampaignInput(
   const currency =
     typeof input.currency === "string" ? input.currency.trim() : "";
   const validFrom =
-    typeof input.valid_from === "string" ? input.valid_from : "";
-  const validTo = typeof input.valid_to === "string" ? input.valid_to : "";
+    typeof input.valid_from === "string" ? input.valid_from.trim() : "";
+  const validTo =
+    typeof input.valid_to === "string" ? input.valid_to.trim() : "";
   const amount = Number(input.amount);
 
   if (!prefix || !currency || !validFrom || !validTo || !Number.isFinite(amount)) {
@@ -37,7 +38,13 @@ export function validateCreateCampaignInput(
     return validationError("amount must be greater than 0");
   }
 
-  if (new Date(validFrom) > new Date(validTo)) {
+  const validFromTs = Date.parse(validFrom);
+  const validToTs = Date.parse(validTo);
+  if (!Number.isFinite(validFromTs) || !Number.isFinite(validToTs)) {
+    return validationError("valid_from and valid_to must be valid dates");
+  }
+
+  if (validFromTs > validToTs) {
     return validationError("valid_from must be before valid_to");
   }
 
