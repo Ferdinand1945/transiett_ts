@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { vouchersExportUrl } from "@/lib/api/campaigns";
 import type { Campaign, Voucher } from "@/lib/types";
 import Card from "./utils/Card";
 import Input from "./utils/Input";
@@ -88,7 +89,7 @@ export default function VouchersModal({
               disabled={loading}
             />
             <Link
-              href={`/api/campaigns/${campaign.id}/vouchers/export`}
+              href={vouchersExportUrl(campaign.id)}
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-500/50"
             >
               <Download />
