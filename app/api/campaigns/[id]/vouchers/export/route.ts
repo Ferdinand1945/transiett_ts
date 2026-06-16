@@ -22,9 +22,14 @@ export async function GET(_request: Request, { params }: Params) {
       async start(controller) {
         controller.enqueue(encoder.encode("code\n"));
         for await (const codes of streamVoucherCodesByCampaignId(parsed.data)) {
-          for (const code of codes) {
-            controller.enqueue(encoder.encode(`${code}\n`));
-          }
+        const escapeCsvCell = (value: string): string => {
+          const neutralized = /^[=+\-@]/.test(value) ? `'${value}` : value;
+          return `"${neutralized.replace(/"/g, '""')}"`;
+        };
+
+        for (const code of codes) {
+          controller.enqueue(encoder.encode(`${escapeCsvCell(code)}\n`));
+        }
         }
         controller.close();
       },
