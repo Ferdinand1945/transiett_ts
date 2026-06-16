@@ -35,7 +35,7 @@ export function validateBatchVoucherCount(
 
   const count = Number((body as { count?: unknown }).count);
   if (
-    !Number.isFinite(count) ||
+    !Number.isInteger(count) ||
     count < 1 ||
     count > MAX_BATCH_VOUCHER_COUNT
   ) {
